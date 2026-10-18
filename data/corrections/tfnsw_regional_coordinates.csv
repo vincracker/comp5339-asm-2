@@ -1,0 +1,24 @@
+charger_record_id,town,station_address,postcode,latitude,longitude,method,evidence_ref,evidence_distance_m
+chr_3dd476d0b3839bebc9e86bd4a63b1ca7f9e23970ebb8391faece414a3f33ef51,Wilcannia,"1 - 7 Ross St, Wilcannia NSW 2836, Australia",2836,-31.557857,143.3855021,tfnsw_pair_near_evidence,ocm:190678,57
+chr_45eaee25caf27f08a972bc6b0effd0b08bfca573eb6707ad9fc48aeea8ec6a94,Casino,"1 Little Walker St, Casino, NSW 2470, Australia",2470,-28.8659158,153.0485564,tfnsw_pair_near_evidence,ocm:260392,29
+chr_270abb75c9c4e1a3c4cf57a900dc680a68c6851a7da21c823861db55c8b8e3d5,Walcha,"10W Apsley St, Walcha NSW 2354, Australia",2354,-30.9827002,151.5928644,tfnsw_pair_near_evidence,ocm:480135,48
+chr_5f9fc23ed9fe805cb067efc3b99cbd2a5c9a935a0e3cba6068bf44756078a2a9,Scone,"116 Liverpool St, Scone, NSW 2337, Australia",2337,-32.0506213,150.8667598,tfnsw_pair_near_evidence,ocm:266500,27
+chr_6f5cb00d3b5a738c591b16ed4dc5f39b82eb2ea88abc6bda749d9c7c29b248c0,Braidwood,"15 Victory St, Braidwood, NSW 2622, Australia",2622,-35.442745,149.7913305,tfnsw_pair_near_evidence,osm:12644131941,38
+chr_35888b63bd216f361f30217a2dd998478916440bf4c95778a813080390b7ea59,Tenterfield,"157 Rouse Street, Tenterfield, NSW 2372, Australia",2372,-29.0572067,152.0186837,tfnsw_pair_near_evidence,ocm:312274,166
+chr_e84af818c18138a35d913a380f85cadcf1b12421d3499e5341225466a70051e4,Bourke,"15c Mitchell St, Bourke, NSW 2840, Australia",2840,-30.08825,145.9351051,tfnsw_pair_near_evidence,ocm:190681,0
+chr_0513d6a39507dac01130eb2b0fa6c5dd413ab9bdc820e167c895cf2a24328a60,Wollongong,"17 Stewart St, Wollongong NSW 2500, Australia",2500,-34.428348,150.9001506,tfnsw_pair_near_evidence,ocm:191177,8
+chr_b818d114f3e4b233634d23acdd8f5ceff51ccaac8a9c658576ad6c3e6bc8fe6b,Nyngan,"18 Dandaloo St, Nyngan, NSW 2825, Australia",2825,-31.5645996,147.1969355,tfnsw_pair_near_evidence,ocm:190680,3
+chr_710171d4c28f6c0c2cb28f556905743bddb555099b0312d06cf1edc05317d0c9,Walgett,"26 Neilly St, Walgett, NSW 2832, Australia",2832,-30.0205758,148.1181013,tfnsw_pair_near_evidence,ocm:190683,203
+chr_fce5a5a3b1b523c3059eb2cddb10bf74de74fcebd60a8a661d95023357c40656,Moree,"28 Auburn Street, Moree, NSW 2400, Australia",2400,-29.4619233,149.8408156,external_location,osm:12583399955,0
+chr_c67692567d4e763d5fdd707edb0015f5f1eb86f387dd9671dc43b6874a15a2ae,Cobar,"3 Broomfield St, Cobar, NSW 2835, Australia",2835,-31.4988197,145.8375768,tfnsw_pair_near_evidence,ocm:190679,2
+chr_9238dc16147f33f72a2f2ef3a22612efd43bac1898fa0b240994c3a66b8c8b0d,Brewarrina,"50 Bathurst St, Brewarrina, NSW 2839, Australia",2839,-29.960127,146.8578887,tfnsw_pair_near_evidence,ocm:190682,57
+chr_d008c091b447ad0bc9ef071aeb54cabbb99ea3ec837f61b19e6825dad2aff733,Gilgandra,"6 Castlereagh St Gilgandra, NSW 2827, Australia",2827,-31.7223908,148.6571378,tfnsw_pair_by_elimination,,
+chr_7be9d041db0393f1f33de3a0cf3117c31b29dbe42abd83e6e52b5fd7b717bf9b,Wagga Wagga,"8/24 Cross St, Wagga Wagga, NSW 2650",2650,-35.1086448,147.3732036,tfnsw_pair_near_evidence,osm:7932870081,47
+chr_defe2d7e5467bece8392359be0bdfa0bd5dec46c427f91f6402e9cfd46330d87,Dorrigo,"81 Hickory St, Dorrigo, NSW 2453, Australia",2453,-30.3383734,152.7125414,tfnsw_pair_near_evidence,osm:13928568814,30
+chr_a968fc610cd649f5e3072639abb1ac68a08c359c418f7c345a8abd3e63dcb781,Yass,"81 Meehan St, Yass NSW 2582, Australia",2582,-34.8411047,148.912197,tfnsw_pair_near_evidence,ocm:190005,23
+chr_3278f14a7f5296fa255f72b1d93dfe36ee64ad8e68ff695972d47cd574c141d7,Armidale,"82 Marsh St, Armidale, NSW 2350, Australia",2350,-30.5118739,151.669395,tfnsw_pair_near_evidence,ocm:170824,29
+chr_575d97b79241398d070094f59bc55cc2f1090635ef6b1faafe3a4ae5ac79810c,Narrabri,"89 Barwan St, Narrabri, NSW 2390, Australia,",2390,-30.3247856,149.784033,tfnsw_pair_near_evidence,osm:12583296437,32
+chr_297f3619f83d59f491135f7806104ee5699c55f158c14b45439e7c585f23c739,Inverell,"Car park, 51 Evans St (Victoria Park), Inverell, NSW 2360, Australia",2360,-29.7756503,151.1151033,tfnsw_pair_near_evidence,ocm:266480,120
+chr_cb8a4ddc453446921bf0087055ebc1412cea008a98a65d1ed692534962da52b1,Temora,"Car park, Little Hoskins St, Temora, NSW 2666",2666,-34.4476103,147.5348555,tfnsw_pair_near_evidence,ocm:190668,181
+chr_867c46799da2c3c6fdd1e005c10bb02b4db207d0298eb754f6dcc53e0e92717b,Broken Hill,"Kintore Headframe Car Park, 51 Bromide St, Broken Hill, NSW 2880, Australia",2880,-31.9598511,141.4601038,tfnsw_pair_near_evidence,ocm:190677,47
+chr_3510061446d83e3797ef06bf3e9912d3982385944b919e0631c4fea56705338d,Coonamble,"Skillman's Lane, Coonamble, NSW 2829, Australia",2829,-30.9529988,148.3875852,tfnsw_pair_near_evidence,osm:9278715200,34

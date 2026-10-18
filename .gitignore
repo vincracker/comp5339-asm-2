@@ -1,0 +1,12 @@
+# Environment
+.venv/
+__pycache__/
+.pytest_cache/
+.DS_Store
+
+# Rebuilt by `python main.py` (deterministic) -- never committed
+data/processed/
+data/generated/*
+!data/generated/README.md
+# Raw AEMO prices the dataset is based on: kept so everyone gets identical prices
+!data/generated/aemo_cache/

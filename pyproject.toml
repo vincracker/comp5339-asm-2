@@ -1,0 +1,15 @@
+[project]
+name = "comp5339-asm2"
+version = "0.1.0"
+description = "COMP5339 Assignment 2: EV charging event streaming and analysis"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "duckdb>=1.4,<2",
+]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
