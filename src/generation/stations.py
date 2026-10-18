@@ -28,6 +28,7 @@ QUERY = """
 SELECT charger_record_id, station_name, station_address, sa4_name,
        number_of_plugs, rating_kw, rating_text, latitude, longitude
 FROM charger_analysis
+WHERE charger_type = 'DC'
 ORDER BY charger_record_id
 """
 
