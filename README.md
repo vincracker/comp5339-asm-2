@@ -79,6 +79,103 @@ Runs on the corrected database. This (1) exports every charger to
 generator flag is passed through, e.g. `--meter-every 2`. Output is deterministic
 (seed 5339).
 
+### Task 2 — MQTT event publishing
+
+```bash
+# Check the example batch offline without connecting to MQTT.
+python -m src.MQTT_publishing.verify --file src/MQTT_publishing/example.json
+
+# In a separate terminal, start the subscriber before publishing.
+# Stop after 20 valid unique batches; omit --messages to keep listening.
+python -m src.MQTT_publishing.verify --messages 20
+
+# Validate every source event and batch without connecting to MQTT or waiting.
+python -m src.MQTT_publishing.publisher --dry-run --cycles 1
+
+# Publish one complete replay; omit --cycles to repeat continuously.
+python -m src.MQTT_publishing.publisher --cycles 1
+
+# Explicit 100x speed: 10 simulated seconds per 0.1 real seconds.
+python -m src.MQTT_publishing.publisher --window-seconds 10 --interval 0.1 --cycles 1
+```
+
+The publisher reads `prices_hourly.csv`, `sessions.csv`, and `session_metering.csv`
+from `--data-dir` (default `data/generated`). Configure the broker with `--server`
+(default `154.36.178.77`), `--port` (1883), and `--topic`
+(`COMP5339/EV_charging`). `--cycles 0`, the default, repeats indefinitely; a positive
+value limits the number of complete replays.
+
+Each MQTT message represents one fixed simulated-time interval. `--window-seconds`
+defaults to 10 and `--interval` defaults to 0.1 seconds, with a minimum of 0.1.
+Thus the default mapping is 10 simulated seconds per 0.1 real seconds, or 100×
+speed. The full generated dataset needs about 3 hours 22 minutes at this speed
+before processing and MQTT acknowledgement overhead; sessions finishing after the
+nominal fourteen-day generation period are included. Setting `--interval 0.2`
+gives 50× speed. The publisher waits at least the configured interval between
+messages, including across replay boundaries.
+
+Messages contain JSON numbers for numeric CSV values and use this envelope.
+[`example.json`](src/MQTT_publishing/example.json) shows a complete batch with all
+four event types, including a final meter reading, session completion, and reuse
+of the same connector at one timestamp.
+
+```json
+{
+  "replay_id": "unique-id-for-this-pass",
+  "sequence": 1,
+  "window_start": "2026-10-01T00:00:00",
+  "window_end": "2026-10-01T00:00:10",
+  "events": [
+    {
+      "event_id": "price_update:chr_example:2026-10-01T00:00:00",
+      "type": "price_update",
+      "ts": "2026-10-01T00:00:00",
+      "station_id": "chr_example",
+      "price_per_kwh": 0.66,
+      "wholesale_per_kwh": 0.1032
+    }
+  ]
+}
+```
+
+Windows start at the earliest event and cover half-open intervals
+`[window_start, window_end)`: an event at `window_end` belongs to the next batch.
+Empty windows publish an empty `events` array to preserve the time mapping.
+Events are globally ordered by timestamp within and between batches; ties use
+`price_update`, `meter`, `session_end`, then `session_start`. Prices and session
+records are sorted internally. The meter file is streamed in its generated order,
+and an out-of-order timestamp is rejected.
+
+Every event has `event_id`, `type`, `ts`, and `station_id`. Remaining fields retain
+the CSV names:
+
+| Event | Source timestamp | Additional content |
+|---|---|---|
+| `price_update` | Price row's `ts` | `price_per_kwh`, `wholesale_per_kwh`; publish the first price for each station, then only actual changes to its retail `price_per_kwh` |
+| `session_start` | `start_ts` | `session_id`, `connector_id`, `site_type`, `vehicle_model`, `start_ts`, `price_per_kwh`; future completion times and totals are omitted |
+| `meter` | Meter row's `ts` | `session_id`, `connector_id`, `voltage_v`, `current_a`, `power_kw`, `energy_kwh`, `soc_pct` |
+| `session_end` | `end_ts` | All session-row fields, including `charge_end_ts`, `end_ts`, charging duration, energy, average/peak power, and cost |
+
+Meter `energy_kwh` is cumulative within its session. Prices are AUD/kWh and
+`cost_aud` is AUD. Source timestamps are preserved without assigning a timezone:
+the CSV timestamps have no UTC offset. Wholesale-only changes do not trigger a
+price event.
+
+Delivery uses MQTT QoS 1. Event IDs are stable across replays, and each pass gets
+a new `replay_id`; consumers can deduplicate redelivery using the pair
+`(replay_id, event_id)`. Sequence numbers restart at 1, price baselines reset, and
+original event timestamps repeat on each pass. The dry run validates a complete
+replay and prints a per-cycle summary without publishing or sleeping.
+
+The small `verify.py` subscriber uses the same `--server`, `--port`, and `--topic`
+defaults as the publisher. It checks field types, event window membership, event
+order, sequence and window continuity, changed retail prices, and cumulative
+meter energy. It skips QoS duplicate batches identified by `(replay_id, sequence)`
+and prints batch and event counts; invalid messages cause an exit status of 1.
+It can attach partway through a replay: its first batch establishes a baseline,
+and subsequent gaps are flagged. `--file` accepts one batch object or an array
+of batches for offline validation.
+
 ## Assumptions
 
 **Scrambled TfNSW coordinates.** All 23 rows with `Source = 'TfNSW Regional'` in the TfNSW

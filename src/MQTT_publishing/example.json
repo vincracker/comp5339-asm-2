@@ -1,0 +1,60 @@
+{
+  "replay_id": "example-replay",
+  "sequence": 1,
+  "window_start": "2026-10-01T01:00:00",
+  "window_end": "2026-10-01T01:00:10",
+  "events": [
+    {
+      "event_id": "price_update:chr_example:2026-10-01T01:00:00",
+      "type": "price_update",
+      "ts": "2026-10-01T01:00:00",
+      "station_id": "chr_example",
+      "price_per_kwh": 0.65,
+      "wholesale_per_kwh": 0.0987
+    },
+    {
+      "event_id": "meter:chr_example-1-202610010045:2026-10-01T01:00:00",
+      "type": "meter",
+      "ts": "2026-10-01T01:00:00",
+      "station_id": "chr_example",
+      "session_id": "chr_example-1-202610010045",
+      "connector_id": 1,
+      "voltage_v": 400.0,
+      "current_a": 50.0,
+      "power_kw": 20.0,
+      "energy_kwh": 7.5,
+      "soc_pct": 70.0
+    },
+    {
+      "event_id": "session_end:chr_example-1-202610010045",
+      "type": "session_end",
+      "ts": "2026-10-01T01:00:00",
+      "session_id": "chr_example-1-202610010045",
+      "station_id": "chr_example",
+      "connector_id": 1,
+      "site_type": "urban",
+      "vehicle_model": "Hyundai Ioniq 5",
+      "start_ts": "2026-10-01T00:45:00",
+      "charge_end_ts": "2026-10-01T01:00:00",
+      "end_ts": "2026-10-01T01:00:00",
+      "charge_minutes": 15.0,
+      "energy_kwh": 7.5,
+      "avg_kw": 30.0,
+      "peak_kw": 40.0,
+      "price_per_kwh": 0.6,
+      "cost_aud": 4.5
+    },
+    {
+      "event_id": "session_start:chr_example-1-202610010100",
+      "type": "session_start",
+      "ts": "2026-10-01T01:00:00",
+      "session_id": "chr_example-1-202610010100",
+      "station_id": "chr_example",
+      "connector_id": 1,
+      "site_type": "urban",
+      "vehicle_model": "Tesla Model 3",
+      "start_ts": "2026-10-01T01:00:00",
+      "price_per_kwh": 0.65
+    }
+  ]
+}

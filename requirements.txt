@@ -2,3 +2,5 @@
 #    uv export --no-hashes --no-dev --format requirements-txt -o requirements.txt
 duckdb==1.5.6
     # via comp5339-asm2
+paho-mqtt==2.1.0
+    # via comp5339-asm2
