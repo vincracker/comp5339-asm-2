@@ -5,8 +5,11 @@ description = "COMP5339 Assignment 2: EV charging event streaming and analysis"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "dash>=4,<5",
+    "dash-leaflet>=1.1,<2",
     "duckdb>=1.4,<2",
     "paho-mqtt>=2.1,<3",
+    "plotly>=6",
 ]
 
 [dependency-groups]

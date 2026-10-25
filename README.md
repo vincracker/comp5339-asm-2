@@ -10,10 +10,17 @@ code/
 ├── src/
 │   ├── corrections/
 │   │   └── coordinates.py       # fixes scrambled Assignment 1 coordinates
-│   └── generation/              # Task 1 — synthetic dataset generation
-│       ├── stations.py          # Assignment 1 chargers -> generator station list
-│       ├── generate_dataset.py  # provided course generator, unmodified copy
-│       └── __main__.py          # runs both steps: python -m src.generation
+│   ├── generation/              # Task 1 — synthetic dataset generation
+│   │   ├── stations.py          # Assignment 1 chargers -> generator station list
+│   │   ├── generate_dataset.py  # provided course generator, unmodified copy
+│   │   └── __main__.py          # runs both steps: python -m src.generation
+│   ├── MQTT_publishing/         # Task 2 — ordered MQTT replay (publisher.py, verify.py)
+│   └── dashboard/               # Task 3 — live map: python -m src.dashboard
+│       ├── chargers.py          # charger details from the corrected Assignment 1 DB
+│       ├── state.py             # live state built from the MQTT batches
+│       ├── subscriber.py        # paho MQTT client feeding the state
+│       ├── app.py               # Dash layout and callbacks
+│       └── assets/              # marker layer (JS) and styles (CSS)
 ├── sql/
 │   └── corrections.sql          # DDL: charger_coordinate_correction audit table
 ├── data/
@@ -175,6 +182,51 @@ and prints batch and event counts; invalid messages cause an exit status of 1.
 It can attach partway through a replay: its first batch establishes a baseline,
 and subsequent gaps are flagged. `--file` accepts one batch object or an array
 of batches for offline validation.
+
+### Task 3 — live dashboard
+
+```bash
+python -m src.dashboard                      # course broker; open http://127.0.0.1:8050
+python -m src.dashboard --server 127.0.0.1   # a local broker (e.g. for testing)
+```
+
+Flags: `--server`, `--port`, `--topic` (same defaults as the publisher), `--db` (default
+`data/processed/ev_charging.duckdb`, so run `python main.py corrections` first), `--host` and
+`--http-port` (default `127.0.0.1:8050`). The dashboard can be started before or after the
+publisher, and it reconnects on its own if the broker drops out.
+
+A Dash app with a Leaflet map (dash-leaflet). An MQTT subscriber thread applies each batch
+to an in-memory `LiveState` (`src/dashboard/state.py`), and the page polls that state once
+a second.
+
+- **Markers appear dynamically.** A charger's marker is added the first time any event names
+  its `station_id`. That `station_id` is the Assignment 1 `charger_record_id`, so its location,
+  name, address, operator and plug types come from Assignment 1, with the corrected coordinates.
+- **Each marker shows two live values.** It displays the latest price per kWh, and its colour
+  shows occupancy: green = all connectors free, amber = some in use (the badge shows "in use/total"),
+  red = all in use, grey = no price received yet. Below zoom 12 markers shrink to coloured dots,
+  so all of NSW stays readable. Hovering shows a tooltip.
+- **Clicking a marker opens the side panel.** It shows the name, address, operator, plug types,
+  rating, region, latest price (with the time it was set, the wholesale component and a ▲/▼
+  trend), occupancy and the last completed session.
+- **Live session curves.** Every active session at the selected charger gets one line,
+  built from its `meter` events and redrawn each second. A toggle switches the curve between
+  energy delivered, power and state of charge. Below the chart, each session lists its connector,
+  vehicle, start time, kWh, kW, SoC and the estimated cost so far.
+- **Header.** Shows the stream status, the simulated time (`window_end` of the last batch),
+  chargers on the map and current sessions. There is also an optional operator filter.
+
+Stream handling (matches the Task 2 envelope):
+- QoS 1 redeliveries are skipped by `(replay_id, sequence)`.
+- Missed sequence numbers are counted and shown in the header.
+- A new `replay_id` clears the state, because each pass restarts at 1 October.
+- If the dashboard joins mid-replay, a `meter` event for a session it never saw start still
+  opens that session, marked "joined mid-session". Markers then fill in as chargers report
+  events, and their prices appear as each one next changes.
+- A session that never receives its `session_end` (e.g. lost during a disconnect) is dropped
+  after 6 simulated hours. The longest generated session is 3.3 h.
+
+The browser loads the map tiles from CARTO/OpenStreetMap, so viewing the map needs internet.
 
 ## Assumptions
 
