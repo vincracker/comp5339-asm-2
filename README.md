@@ -226,7 +226,7 @@ Stream handling (matches the Task 2 envelope):
 - A session that never receives its `session_end` (e.g. lost during a disconnect) is dropped
   after 6 simulated hours. The longest generated session is 3.3 h.
 
-The browser loads the map tiles from CARTO/OpenStreetMap, so viewing the map needs internet.
+The browser loads the map tiles from OpenStreetMap (no API key needed), so viewing the map needs internet.
 
 ## Assumptions
 
