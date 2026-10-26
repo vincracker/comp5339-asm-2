@@ -4,8 +4,12 @@ The page polls LiveState once a second (dcc.Interval). Marker data is only resen
 state version changes, i.e. a new batch arrived; assets/dashboard.js then updates just the
 markers that changed. Each marker shows the charger's latest price, coloured by how many of
 its connectors are in use.
+
+With an EventStore (Task 4), the header and the charger panel also show metrics queried from
+the stored events (src/storage/queries.py): the current state of the charger and its usage
+over the last 24 hours and 7 days, as of the last stored simulated time.
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 from html import escape
 from pathlib import Path
 
@@ -14,6 +18,8 @@ import plotly.graph_objects as go
 from dash import ClientsideFunction, Dash, Input, Output, State, dcc, html, no_update
 
 from .state import LiveState, status
+from ..storage import queries
+from ..storage.event_store import EventStore
 
 NSW_CENTER = (-33.2, 148.6)
 # Categorical slots for one line per concurrent session (fixed order, see dataviz palette).
@@ -23,7 +29,7 @@ STATUS_LABELS = {"free": "Available", "busy": "Partly in use", "full": "All conn
 METRICS = {"energy_kwh": "Energy delivered (kWh)", "power_kw": "Power (kW)", "soc_pct": "State of charge (%)"}
 
 
-def create_app(state: LiveState) -> Dash:
+def create_app(state: LiveState, store: EventStore | None = None) -> Dash:
     app = Dash(__name__, title="NSW EV Charging Live", assets_folder=str(Path(__file__).with_name("assets")))
     operators = sorted({c["operator"] for c in state.chargers.values() if c["operator"]})
     app.layout = html.Div(className="page", children=[
@@ -62,6 +68,12 @@ def create_app(state: LiveState) -> Dash:
                     html.Div(id="session-cards"),
                 ]),
                 html.Div(id="panel-footer"),
+                # Task 4: metrics from the event store; kept on the page like the live graph.
+                html.Div(id="history-section", style={"display": "none"}, children=[
+                    html.Div(id="history-info"),
+                    html.Div("Connector utilisation by hour, last 24 h", className="muted small chart-title"),
+                    dcc.Graph(id="history-graph", config={"displayModeBar": False}, className="graph"),
+                ]),
             ]),
         ]),
         dcc.Interval(id="tick", interval=1000),
@@ -69,6 +81,7 @@ def create_app(state: LiveState) -> Dash:
         dcc.Store(id="map-version"),
         dcc.Store(id="marker-data"),
         dcc.Store(id="marker-count"),
+        dcc.Store(id="history-key"),
     ])
 
     @app.callback(Output("marker-data", "data"), Output("stats", "children"), Output("map-version", "data"),
@@ -82,7 +95,7 @@ def create_app(state: LiveState) -> Dash:
         markers = state.markers()
         if operator_filter:
             markers = [m for m in markers if m["operator"] in operator_filter]
-        return [_marker(m) for m in markers], _stats(summary), key
+        return [_marker(m) for m in markers], _stats(summary) + _store_stats(store), key
 
     # Drawn in the browser (assets/dashboard.js), which also sets "selected" on marker click.
     app.clientside_callback(ClientsideFunction("ev", "updateMarkers"), Output("marker-count", "data"),
@@ -107,6 +120,25 @@ def create_app(state: LiveState) -> Dash:
         cards = [_session_card(s, i, detail["price"]) for i, s in enumerate(sessions)]
         return (_info(detail), {} if sessions else {"display": "none"}, cards,
                 _figure(sessions, metric), _footer(detail))
+
+    @app.callback(Output("history-section", "style"), Output("history-info", "children"),
+                  Output("history-graph", "figure"), Output("history-key", "data"),
+                  Input("tick", "n_intervals"), Input("selected", "data"), State("history-key", "data"))
+    def refresh_history(_, station_id, seen):
+        if store is None or store.clock is None or station_id not in state.chargers:
+            # Hide once; the layout starts hidden, so nothing to send while it stays that way.
+            return ({"display": "none"}, [], _history_figure([]), None) if seen else (no_update,) * 4
+        key = [station_id, store.clock.isoformat()]
+        if key == seen:  # nothing new stored since this browser's last tick
+            return no_update, no_update, no_update, no_update
+        cur = store.cursor()
+        try:
+            current = queries.charger_current(cur, station_id, store.clock)
+            history = queries.charger_history(cur, station_id, store.clock)
+            hourly = queries.charger_hourly_utilisation(cur, station_id, store.clock)
+        finally:
+            cur.close()
+        return {}, _history(current, history, store.clock), _history_figure(hourly), key
 
     return app
 
@@ -234,3 +266,84 @@ def _figure(sessions: list[dict], metric: str) -> go.Figure:
 
 def _time(ts: str | None) -> str:
     return datetime.fromisoformat(ts).strftime("%d %b %H:%M") if ts else "?"
+
+
+# ---- Task 4: metrics from the event store ---------------------------------------------------
+
+def _store_stats(store: EventStore | None) -> list:
+    """Header tiles: what the store holds, and network-wide usage over the last 24 h."""
+    if store is None or store.clock is None:
+        return []
+    cur = store.cursor()
+    try:
+        counts = queries.stored_counts(cur)
+        net = queries.network_summary(cur, store.clock)
+    finally:
+        cur.close()
+    stored = html.Span(f"{counts['events']:,} events",
+                       title=f"{counts['batches']:,} MQTT messages in DuckDB; last write {store.last_flush_ms:.0f} ms")
+    return [html.Div(className="stat", children=[html.Span(k, className="stat-label"), html.Span(v, className="stat-value")])
+            for k, v in (("Stored", stored),
+                         ("Last 24 h", f"{net['sessions']:,} sessions · {net['energy_kwh'] / 1000:,.1f} MWh"))]
+
+
+def _history(cur: dict | None, hist: dict, clock: datetime) -> list:
+    out = [html.H3("From the event store"),
+           html.P(f"As of {clock:%d %b %H:%M:%S} (simulated), from the events stored in DuckDB.",
+                  className="muted small")]
+    if cur:
+        if cur["active_sessions"]:
+            idle = f"{cur['active_sessions']} of {cur['connectors']} connectors charging"
+        elif cur["last_session_end"]:
+            idle = f"Idle for {_minutes((clock - cur['last_session_end']).total_seconds() / 60)}"
+        else:
+            idle = "No session stored yet"
+        price = (f"${cur['price_per_kwh']:.2f}/kWh for {_minutes((clock - cur['price_since']).total_seconds() / 60)}"
+                 if cur["price_per_kwh"] is not None else None)
+        out.append(html.Div(className="details", children=[_row("Now", idle), _row("Price", price)]))
+    day, week = hist["day"], hist["week"]
+    rows = [("Sessions", "sessions_completed", lambda v: f"{v:,}"),
+            ("Energy", "energy_kwh", lambda v: f"{v:,.0f} kWh"),
+            ("Revenue", "revenue_aud", lambda v: f"${v:,.0f}"),
+            ("Avg charge", "avg_charge_minutes", lambda v: f"{v:.0f} min"),
+            ("Utilisation", "utilisation", lambda v: f"{v:.0%}")]
+
+    def cell(d, key, fmt):
+        v = d.get(key)
+        return fmt(v) if v is not None else "–"
+
+    table = html.Table(className="usage", children=[
+        html.Thead(html.Tr([html.Th(""), html.Th(_window(hist["day_from"], clock, timedelta(days=1), "Last 24 h")),
+                            html.Th(_window(hist["week_from"], clock, timedelta(days=7), "Last 7 days"))])),
+        html.Tbody([html.Tr([html.Td(label), html.Td(cell(day, k, f)), html.Td(cell(week, k, f))])
+                    for label, k, f in rows]),
+    ])
+    out.append(table)
+    pr = hist["price_range"]
+    if pr and pr["low"] is not None:
+        span = _window(hist["day_from"], clock, timedelta(days=1), "last 24 h")
+        out.append(html.P(f"Price range, {span[0].lower() + span[1:]}: ${pr['low']:.2f} – ${pr['high']:.2f}/kWh",
+                          className="muted small"))
+    return out
+
+
+def _history_figure(hourly: list) -> go.Figure:
+    fig = go.Figure(go.Bar(x=[h for h, _ in hourly], y=[u * 100 for _, u in hourly], marker_color=SERIES[0],
+                           hovertemplate="%{x|%d %b %H:00}<br>%{y:.0f}% of connector time<extra></extra>"))
+    fig.update_layout(
+        margin={"l": 44, "r": 12, "t": 8, "b": 36}, height=170, paper_bgcolor="#fcfcfb", plot_bgcolor="#fcfcfb",
+        font={"family": "system-ui, -apple-system, Segoe UI, sans-serif", "size": 11, "color": "#52514e"},
+        bargap=0.15, showlegend=False,
+        yaxis={"title": "In use (%)", "gridcolor": "#e1e0d9", "zeroline": False, "rangemode": "tozero"},
+        xaxis={"tickformat": "%H:00", "linecolor": "#c3c2b7"},
+    )
+    return fig
+
+
+def _window(t0: datetime, clock: datetime, span: timedelta, label: str) -> str:
+    """Column heading; names the start when storage began within the window."""
+    return label if clock - t0 >= span else f"Since {t0:%d %b %H:%M}"
+
+
+def _minutes(m: float) -> str:
+    return f"{m:.0f} min" if m < 90 else f"{m / 60:.1f} h"

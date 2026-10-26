@@ -15,14 +15,19 @@ code/
 │   │   ├── generate_dataset.py  # provided course generator, unmodified copy
 │   │   └── __main__.py          # runs both steps: python -m src.generation
 │   ├── MQTT_publishing/         # Task 2 — ordered MQTT replay (publisher.py, verify.py)
-│   └── dashboard/               # Task 3 — live map: python -m src.dashboard
-│       ├── chargers.py          # charger details from the corrected Assignment 1 DB
-│       ├── state.py             # live state built from the MQTT batches
-│       ├── subscriber.py        # paho MQTT client feeding the state
-│       ├── app.py               # Dash layout and callbacks
-│       └── assets/              # marker layer (JS) and styles (CSS)
+│   ├── dashboard/               # Task 3 — live map: python -m src.dashboard
+│   │   ├── chargers.py          # charger details from the corrected Assignment 1 DB
+│   │   ├── state.py             # live state built from the MQTT batches
+│   │   ├── subscriber.py        # paho MQTT client feeding the state (and the event store)
+│   │   ├── app.py               # Dash layout and callbacks
+│   │   └── assets/              # marker layer (JS) and styles (CSS)
+│   └── storage/                 # Task 4 — event store in DuckDB
+│       ├── event_store.py       # buffered writer: MQTT payloads -> event tables
+│       ├── queries.py           # current-state and historical metrics for the dashboard
+│       └── __main__.py          # python -m src.storage check | load
 ├── sql/
-│   └── corrections.sql          # DDL: charger_coordinate_correction audit table
+│   ├── corrections.sql          # DDL: charger_coordinate_correction audit table
+│   └── events.sql               # DDL: Task 4 event tables and analytics macros
 ├── data/
 │   ├── assignment1/ev_chargers.duckdb   # Assignment 1 database (input, never modified)
 │   ├── corrections/tfnsw_regional_coordinates.csv   # reviewed coordinate fixes
@@ -227,6 +232,99 @@ Stream handling (matches the Task 2 envelope):
   after 6 simulated hours. The longest generated session is 3.3 h.
 
 The browser loads the map tiles from OpenStreetMap (no API key needed), so viewing the map needs internet.
+
+### Task 4 — event storage and charging analytics
+
+```bash
+python -m src.dashboard --server 127.0.0.1   # stores every received event while it runs
+python -m src.storage check                  # row counts + integrity checks of what is stored
+python -m src.storage load                   # testing only: store a full replay without MQTT (~2 min)
+```
+
+The dashboard stores every MQTT message it receives in `data/processed/ev_charging.duckdb`,
+the same database that holds the corrected Assignment 1 tables, so events join to
+`charger` directly. `--no-store` turns storage off. `python main.py corrections` rebuilds
+that file from Assignment 1, which also deletes stored events.
+
+**How it is wired.** One process owns the database, because DuckDB allows a single writing
+process: the dashboard. The MQTT thread only queues each raw payload (`EventStore.submit`).
+A writer thread commits everything queued once a second, in one transaction. The batches
+are unpacked inside DuckDB with `from_json` and split into the event tables by set-based
+`INSERT ... SELECT`. Row-by-row `executemany` was far too slow for this (7.7 s for 3,000
+rows in a test); set-based ingest stores a whole replay of 2.56M events in about 1.5 minutes. Dash callbacks read through their own cursors, so they
+see each committed flush and never half of one.
+
+**Schema extension** ([`sql/events.sql`](sql/events.sql), applied automatically and idempotent):
+
+| Table | Key | Linked to Assignment 1 | Content |
+|---|---|---|---|
+| `stream_batch` | `(replay_id, sequence)` | — | One row per MQTT message: window, event count, receive time (audit, gaps, lag) |
+| `price_event` | `(station_id, ts)` | `station_id` → `charger` | Retail and wholesale price changes |
+| `charging_session` | `session_id` | `station_id` → `charger` | One row per session: start fields, then completed by `session_end` (upsert) |
+| `meter_event` | `(session_id, ts)`, enforced at ingest | via `charging_session` | Per-minute readings (session progress curves) |
+| `unmatched_event` | `event_id` | — | Events naming no Assignment 1 charger (kept, not dropped; 0 so far) |
+
+Design decisions:
+- **Natural keys make storage idempotent.** A QoS 1 redelivery, a second replay or a
+  re-run inserts nothing twice (`INSERT OR IGNORE` / `ON CONFLICT`). A full second replay
+  adds only its 121,318 `stream_batch` rows.
+- **Sessions are built up from events.** A meter reading for a session whose start was missed
+  (dashboard joined mid-session) opens a partial row (`start_seen = false`), and the
+  later `session_end`, which carries the full session, completes it.
+- **`station_id` and `connector_id` are stored once per session**, not on every meter reading,
+  because they depend on `session_id` alone.
+- **Unknown chargers do not abort a flush.** Events are checked against `charger` before
+  insertion, so a bad `station_id` cannot violate a foreign key and roll back the other
+  events. If a flush still fails (e.g. a CHECK constraint), its messages are retried one at
+  a time and only the bad one is skipped.
+
+**Physical design** (full 14-day replay: 121k messages, 101k prices, 76k sessions, 2.3M meter readings):
+- `meter_event` has **no index**. DuckDB backs every primary and foreign key with an ART
+  index. With the keys declared, the database was 366 MB. Without them, it is 132 MB, and
+  the 53 MB Assignment 1 file is part of both figures. Uniqueness is enforced at ingest
+  instead, by an anti-join against the stored rows in the flush's time range.
+  `python -m src.storage check` verifies the uniqueness and the parent session rows.
+- **Insertion order is time order.** Events arrive sorted by simulated time, so DuckDB's
+  per-row-group min/max zone maps act as a time index for free. A 100-second `ts` range of
+  `meter_event` scans in 0.7 ms. The same filter written so the zone maps cannot be used
+  (`strftime(ts)`) takes 14.5 ms. The ingest anti-join and every dashboard query filter on
+  plain timestamp ranges for this reason.
+- The small, frequently queried tables (`charging_session`, `price_event`) keep their keys.
+- Prices and costs are `DECIMAL`; meter readings are `REAL` (4 bytes), which is ample for
+  sensor-style values.
+
+Ingest cost at the default publishing speed: a one-second flush (10 batches) takes a median
+of 47 ms, and the p95 is 67 ms. A full replay loads offline in about 1.5 minutes.
+
+Tested end to end over a local MQTT broker: one full replay published with
+`--window-seconds 600` was stored completely, 2,022 messages and 2,558,599 events, and
+`python -m src.storage check` passed every check.
+
+**Analytics** ([`src/storage/queries.py`](src/storage/queries.py)). The table macros
+`charger_state_at(t)` and `charger_usage(t0, t1)` live in `sql/events.sql`. Every metric
+is computed *as of* the simulated time of the last stored batch, not from "the latest rows".
+A replay therefore shows what the network looked like at that moment, even when the store
+already holds later data from an earlier pass. Each dashboard query takes 1–11 ms on the
+full replay.
+
+| Where | Metric | Kind |
+|---|---|---|
+| Header, "Stored" | Events and MQTT messages stored | store status |
+| Header, "Last 24 h" | Network sessions completed and MWh delivered in the last 24 simulated hours | historical |
+| Charger panel, "Now" | Connectors charging, or how long the charger has been idle | current state |
+| Charger panel, "Price" | Price in force, and for how long | current state |
+| Charger panel, table | Sessions, energy, revenue, average charge time, utilisation: last 24 h vs last 7 days | historical |
+| Charger panel, chart | Connector utilisation for each of the last 24 hours | historical |
+
+Utilisation is the connector-time in use divided by the connector-time available, with
+sessions clipped to the window. A window that reaches back before the first stored message
+starts at that message (the heading then reads "Since …"). A session that never received
+its `session_end` stops counting as active after 6 simulated hours, the same rule as the
+live state (Task 3).
+
+`python -m src.storage load` replays the generated CSVs through the publisher's own batching
+(`iter_batches`) and the same ingest SQL, without MQTT. It is for tests and benchmarks;
+its batches are tagged `replay_id = offline-…`.
 
 ## Assumptions
 
