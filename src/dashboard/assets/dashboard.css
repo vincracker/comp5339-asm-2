@@ -62,6 +62,11 @@ html, body { margin: 0; height: 100%; background: var(--page); color: var(--ink)
 .session { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .swatch { width: 4px; border-radius: 2px; flex-shrink: 0; }
 .session-title { font-weight: 600; }
+.usage { width: 100%; border-collapse: collapse; margin: 10px 0 6px; font-variant-numeric: tabular-nums; }
+.usage th, .usage td { padding: 5px 0; border-bottom: 1px solid var(--line); text-align: right; }
+.usage th:first-child, .usage td:first-child { text-align: left; color: var(--muted); font-weight: normal; }
+.usage th { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.chart-title { margin-top: 10px; }
 
 /* Map markers (drawn by dashboard.js). Zoomed out: dots; zoomed in: price pins. */
 .pin-wrap { background: none; border: none; }
