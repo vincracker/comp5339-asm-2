@@ -92,3 +92,5 @@ html, body { margin: 0; height: 100%; background: var(--page); color: var(--ink)
     .map-wrap { flex: none; height: 60vh; }
     .panel { width: auto; border-left: none; border-top: 1px solid var(--line); }
 }
+/* The selected marker has its own ring; hide the browser's focus box Leaflet markers get on click. */
+.leaflet-marker-icon:focus { outline: none; }
